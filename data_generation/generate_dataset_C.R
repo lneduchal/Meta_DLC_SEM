@@ -195,5 +195,5 @@ for (i in 1:n_persons){
 }
 
 # Results are saved
-write.csv(y, "~/Meta_DLC_SEM/data_generation/target/y_C.csv")
+write.csv(y, "~/Meta_DLC_SEM/data_generation/targets/y_C.csv")
 write.csv(state_switch, "~/Meta_DLC_SEM/data_generation/state_switch/state_switch_C.csv")
