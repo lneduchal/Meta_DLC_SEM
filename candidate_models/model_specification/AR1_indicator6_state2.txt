@@ -1,0 +1,194 @@
+
+model {
+
+  # P(S_{t} = s | S_{t - 1} = 2)
+  state_probability_given_S2[1] ~ dunif(0, 0.01)
+  state_probability_given_S2[2] <- 1 - state_probability_given_S2[1]
+  
+  for (i in 1:n_persons) {
+    
+    # Between-level: ----------------------------------------------------------- 
+    
+    # Latent variables differ w.r.t. state, individual and factor
+    eta_between_S1[i, 1:2] ~ dmnorm(mu_0[1:2], phi_zeta_between_S1[1:2, 1:2])
+    eta_between_S2[i, 1:2] ~ dmnorm(mu_0[1:2], phi_zeta_between_S2[1:2, 1:2])
+    
+    # Within-level: Logistic HMM for latent states -----------------------------
+    
+    # All individuals start in state 1
+    state_membership[i, 1] <- 1
+    
+    # t = 2, ..., n_timepoints
+    for (t in 2:n_timepoints) {
+      
+      # Transition probability
+      logit(eta_between[i, t]) <- beta_between[1] + 
+      beta_between[2] * eta_within_S1[t - 1, i, 1] + 
+      beta_between[3] * eta_within_S1[t - 1, i, 2]
+      
+      # P(S_{t} = s | S_{t - 1} = 1)
+      state_probability_given_S1[i, t, 1] <- eta_between[i, t]
+      state_probability_given_S1[i, t, 2] <- 1 - state_probability_given_S1[i, t, 1]
+      
+      # Transition matrix
+      state_probability_S1[i, t, 1:2] <- ifelse(
+      
+        state_membership[i, t - 1] == 1,
+        state_probability_given_S1[i, t, 1:2],
+        state_probability_given_S2[1:2]
+        
+      )
+      
+      # Sampling state memberships
+      state_membership[i, t] ~ dcat(state_probability_S1[i, t, 1:2])
+      
+    }
+  
+    for (t in 1:n_timepoints){
+      
+      # Individual-, time-dependent latent variables
+      eta_within_S1[t, i, 1:2] ~ dmnorm(mu_eta_within_S1[t, i, 1:2], phi_zeta_within_S1[1:2, 1:2])
+      eta_within_S2[t, i, 1:2] ~ dmnorm(mu_eta_within_S2[t, i, 1:2], phi_zeta_within_S2[1:2, 1:2])
+      
+    }
+    
+    # Estimating the within-level latent variables using an AR(1) process ------
+    
+    # t = 1 
+    for (p in 1:n_factors) {
+    
+      mu_eta_within_S1[1, i, p] <- alpha_S1[p] + beta_within_S1[p] * eta_between_S1[i, p]
+      mu_eta_within_S2[1, i, p] <- alpha_S2[p] + beta_within_S2[p] * eta_between_S2[i, p]
+    
+    }
+    
+    # t = 2, ..., n_timepoints
+    for (t in 2:n_timepoints) {
+      
+      for (p in 1:n_factors) {
+        
+        conditional_mu_eta_within_S1[t - 1, i, p] <- eta_within_S1[t - 1, i, p] - alpha_S1[p] - eta_between_S1[i, p]
+        conditional_mu_eta_within_S2[t - 1, i, p] <- eta_within_S2[t - 1, i, p] - alpha_S2[p] - eta_between_S2[i, p]
+        
+        mu_eta_within_S1[t, i, p] <- alpha_S1[p] + eta_between_S1[i, p] + 
+        beta_within_S1[1] * conditional_mu_eta_within_S1[t - 1, i, 1] + 
+        beta_within_S1[2] * conditional_mu_eta_within_S1[t - 1, i, 2]
+        mu_eta_within_S2[t, i, p] <- alpha_S2[p] + eta_between_S2[i, p] + 
+        beta_within_S2[1] * conditional_mu_eta_within_S2[t - 1, i, 1] + 
+        beta_within_S2[2] * conditional_mu_eta_within_S2[t - 1, i, 2]
+      
+      }
+    
+    }
+    
+    # Measurement model
+    for (t in 1:n_timepoints) {
+    
+      for (j in 1:n_indicators) {
+        
+        # Predicted scores
+        y[t, i, j] ~ dmnorm(
+        mu_y_within[t, i, j, state_membership[i, t]], 
+        phi_epsilon_within[j, state_membership[i, t]]
+        )
+      
+      }
+      
+      # S = 1
+      mu_y_within[t, i, 1, 1] <- eta_within_S1[t, i, 1] 
+      mu_y_within[t, i, 2, 1] <- lambda_within_S1[1] * eta_within_S1[t, i, 1]
+      mu_y_within[t, i, 3, 1] <- lambda_within_S1[2] * eta_within_S1[t, i, 1]
+      
+      mu_y_within[t, i, 4, 1] <- eta_within_S1[t, i, 2] 
+      mu_y_within[t, i, 5, 1] <- lambda_within_S1[3] * eta_within_S1[t, i, 2]
+      mu_y_within[t, i, 6, 1] <- lambda_within_S1[4] * eta_within_S1[t, i, 2] 
+      
+
+      # S = 2
+      mu_y_within[t, i, 1, 2] <- eta_within_S2[t, i, 1] 
+      mu_y_within[t, i, 2, 2] <- lambda_within_S2[1] * eta_within_S2[t, i, 1] 
+      mu_y_within[t, i, 3, 2] <- lambda_within_S2[2] * eta_within_S2[t, i, 1]
+      
+      mu_y_within[t, i, 4, 2] <- eta_within_S2[t, i, 2] 
+      mu_y_within[t, i, 5, 2] <- lambda_within_S2[3] * eta_within_S2[t, i, 2] 
+      
+      # Indicator 6 loads on both factors
+      mu_y_within[t, i, 6, 2] <- lambda_within_S2[4] * eta_within_S2[t, i, 2] + 
+      lambda_within_S2[5] * eta_within_S2[t, i, 1] 
+    
+    }
+  
+  }
+  
+  # Prior specification --------------------------------------------------------
+  
+  for (p in 1:n_factors) {
+    
+    # AR(1) intercepts 
+    alpha_S1[p] ~ dnorm(0, 0.001)
+    delta[p] ~ dnorm(0, 1)I(0,)
+    
+    # Adding delta due to higher mean in S = 2
+    alpha_S2[p] <- alpha_S1[p] + delta[p]
+    
+    # AR(1) coefficients
+    beta_within_S1[p] ~ dunif(-1, 1)
+    beta_within_S2[p] ~ dunif(-1, 1)
+  
+  }
+  
+  # Factor loadings
+  for (j in 1:(n_indicators - n_factors + 1)) {
+  
+    lambda_within_S1[j] ~ dnorm(0.5, 1)
+    lambda_within_S2[j] ~ dnorm(0.5, 1)
+  
+  }
+  
+  # Between-level coefficients
+  beta_between[1] ~ dnorm(0, 1)
+  beta_between[2] ~ dnorm(0, 1)
+  beta_between[3] ~ dnorm(0, 1)
+  
+  # Covariances and precisions
+  
+  for (j in 1:n_indicators) {
+  
+    for (s in 1:n_states) {
+    
+      phi_epsilon_within[j, s] ~ dgamma(1, 1)
+      
+    }
+    
+  }
+  
+  phi_zeta_between_S1[1:2, 1:2] ~ dwish(phi_0, 2)
+  phi_zeta_between_S2[1:2, 1:2] ~ dwish(phi_0, 2)
+  phi_zeta_within_S1[1:2, 1:2] ~ dwish(phi_0, 2) 
+  phi_zeta_within_S2[1:2, 1:2] ~ dwish(phi_0, 2)
+  
+  for(j in 1:n_indicators) {
+  
+    for(p in 1:n_factors) {
+    
+      sigma_epsilon_within[j, p] <- 1 / phi_epsilon_within[j, p]
+      
+    }
+    
+  }
+  
+  sigma_zeta_between_S1[1:2, 1:2] <- inverse(phi_zeta_between_S1[1:2, 1:2])
+  sigma_zeta_between_S2[1:2, 1:2] <- inverse(phi_zeta_between_S2[1:2, 1:2])
+  
+  # Evaluation metrics ---------------------------------------------------------
+  for(i in 1:n_persons) {
+    
+    # Surrogate for the state switch of individual i
+    state_switch[i] <- n_timepoints + 1 - mean(state_membership[i, 1:n_timepoints] - 1) * n_timepoints
+    
+    # Final state of individual i
+    state_T[i] <- state_membership[i, n_timepoints]
+    
+  }
+  
+}
