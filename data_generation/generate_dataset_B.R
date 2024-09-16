@@ -2,7 +2,7 @@
 library(mvtnorm)
 
 # Data is generated based on previously defined dimensions and parameter values
-source("~/Desktop/Meta/configuration.R")
+source("~/Meta_DLC_SEM/configuration.R")
 
 options(scipen = 999)
 set.seed(random_seed)
