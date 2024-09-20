@@ -104,7 +104,7 @@ y_S2 <- array(NA, c(n_timepoints, n_persons, n_indicators))
 eta_within_S2[1, , ] <- mu_S2 * support + eta_between_S2 + rmvnorm(
   n_persons, mu_RE, phi_within_S2 - phi_between_S2
 )
-y_S2[1, , ] <- eta_within_S2[1, , ] %*% t(lambda_S2_before) + rmvnorm(
+y_S2[1, , ] <- eta_within_S2[1, , ] %*% t(lambda_S2) + rmvnorm(
   n_persons, sigma = epsilon_S2
 )
 
