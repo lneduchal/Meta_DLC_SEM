@@ -49,7 +49,8 @@ n_chains <- 5
 mu_prior <- c(0, 0)
 precision_prior <- diag(2)
 
-# Parameters estimates to retrieve
+# Parameter estimates to retrieve 
+# Note that changing these requires to also change candidate_models/model_evaluation/evaluation.R
 MCMC_params <- c(
   
   # AR(1) intercepts and coefficients
